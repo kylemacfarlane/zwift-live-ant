@@ -1,0 +1,546 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Zwift ANT+ Log Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.3/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.5/nv.d3.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.5/nv.d3.min.css" />
+</head>
+<body>
+    <h1>Zwift ANT+ Log Viewer</h1>
+
+    <div class="drop-area">
+        <div>Drop Zwift log here.<br /><br />You can use the log of an in progress ride and it will auto-update.</div>
+    </div>
+    <div class="devices-container"></div>
+
+    <div class="help">
+        <h2>Help</h2>
+
+        <p>Only tested in Chrome and Firefox.</p>
+
+        <h3>Avg. fails</h3>
+        <p>This is the average rx fails of a device. It is calculated across the whole time of the log so if you pair or unpair a device mid-ride its average will be affected.</p>
+
+        <h3>Channel 0 in wrong state</h3>
+        <p>I'm not entirely sure what this means but I think it might have something to do with background searching having to be restarted. This could mean that it takes longer to find and pair devices.</p>
+
+        <h3>Data rate</h3>
+        <p>Most ANT+ devices transmit at 4Hz but some have the option to transmit at 8Hz. There's no good way to tell the difference in the Zwift log so we have to guess from the number of rx fails seen per second. The problem with this method is if an 8Hz device has a very good signal strength it will appear as 4Hz and have double the rx fails percentage it should have.</p>
+        <p>Heart rate, speed, and cadence devices are always 4Hz. Speed + cadence devices are always 8Hz. Power meters can be 4Hz or 8Hz but most seem to be 8Hz. Trainers seem to be a mix of 4Hz and 8Hz. If you see "[PowerMeter]" lines in your Zwift log then the device which is sending those is 8Hz.</p>
+
+        <h3>Devices paired</h3>
+        <p>A device was paired. If this appears outside of the Zwift pairing screen then it probably indicates a problem.</p>
+
+        <h3>Devices unpaired</h3>
+        <p>A device was unpaired. If this appears outside of the Zwift pairing screen then it probably indicates a problem.</p>
+
+        <h3>Rx fails</h3>
+        <p>An rx fail is when a page from an ANT+ device arrives later than expected and officially is caused only by interference. However I suspect it might also be made worse by slow processors and firmware in most trainers and power meters failing to keep up.</p>
+        <p>When there are two seconds of solid rx fails (i.e. 8 straight rx fails at 4Hz or 16 at 8Hz) a drop out occurs. Unfortunately the Zwift logs aren't accurate enough to determine exactly when this happens.</p>
+        <p>Since we can't determine exact signal quality and the fails are grouped into 10 second bins then the colours are actually pretty arbitrary. Green is up to 39%, orange is 41% to 65%, and red is 66% and above. They were chosen based on my experience of when drop outs start to occur with green being no drop outs, orange being possible drop outs, and red being almost certain drop outs.</p>
+        <p>It seems to be normal for trainers and power meters to have 2-4x the rx fails of heart rate and cadence devices.</p>
+        <p>Sometimes even different ANT+ profiles broadcasted by the same device have different failure rates (this is why I suspect processors/firmware are partly responsible as well).</p>
+        <p>If you see no rx fails but you are getting sensor readings then your environment is very very good. If you see no rx fails and you're not getting sensor readings then the device isn't connected.</p>
+
+        <h3>Search for new devices</h3>
+        <p>Zwift searched for new devices. If this appears outside of the Zwift pairing screen then it probably indicates a problem. If you use the pairing screen as a break in Zwift then you might see a few of these mid-ride.</p>
+
+        <h3>Too many rx fails</h3>
+        <p>This is a drop out after two seconds of solid rx fails. It may or may not align with an increase in rx fails on one of the device graphs.</p>
+        <p>In a healthy environment devices will often reconnect immediately and you won't even notice a drop out in Zwift. If you get drop outs and lose sensor readings in game then try cleaning up your environment or getting an ANTUSB-m (Dynastream, Garmin, or Zwift branded) dongle which supports High Duty Search and can pair much quicker. Keep the extension cable &lt;=2 metres and buy a good brand like Lindy (in my experience all 3 metre cables made things no better or worse and Amazon Basics branded cables made no difference).</p>
+        <p>These also appear when a device has been idle for too long and in those cases is completely normal.</p>
+
+        <h3>USB dongle failed</h3>
+        <p>Something is wrong with the USB dongle. Zwift will see the dongle but won't be able to find any devices. Sometimes replugging it will fix the issue but other times you have to restart Zwift. So far I've only seen this happen with the Suunto Moviestick Mini and Tacx T2028 (both use the nRF24AP2U) and not the Garmin ANTUSB-m (appears to use something from the nRF51 series).</p>
+
+        <h3>USB dongle plugged in</h3>
+        <p>There should be only one of these at the start. If you see more then you might have a loose connection or an underpowered USB port.</p>
+    </div>
+
+    <style>
+body {
+    margin: 0;
+}
+
+body,
+.nvd3 text,
+.nvd3 .title,
+.nvtooltip {
+    font-family: 'Courier New', Courier, 'Lucida Sans Typewriter', 'Lucida Typewriter', monospace !important;
+}
+
+.drop-area {
+    align-items: center;
+    background: #EEE;
+    border: 1px dashed;
+    display: flex;
+    height: 200px;
+    justify-content: center;
+    margin: auto 10px;
+    text-align: center;
+}
+
+.drop-area.over {
+    background: #DDD;
+}
+
+.devices-container {
+    overflow: auto;
+}
+
+.device-header {
+    left: 0;
+    position: sticky;
+}
+
+.device-header h2 {
+    display: inline;
+}
+
+svg {
+    margin-left: auto;
+    padding-top: 10px;
+}
+
+.help {
+    max-width: 800px;
+}
+
+h1,
+.device-header,
+.help {
+    padding: 0 10px;
+}
+    </style>
+
+    <script>
+var baseTime = 0,
+    startTime = 0,
+    previousHour = 0,
+    days = 0;
+
+var GRAPH_BIN_SIZE = 10;
+
+var LOG_TIME_REGEX = new RegExp(/Log Time: (\d{1,2}:\d{2}:\d{2}) (\d{4}-\d{2}-\d{2})/),
+    LINE_REGEX = new RegExp(/\[(\d{1,2}):(\d{2}):(\d{2})\] ANT  : (.*)/);
+
+var RX_FAIL_REGEX = new RegExp(/Rx Fail on channel (\d+)/),
+    PAIRED_REGEX = new RegExp(/Pairing deviceID (\d+) to channel (\d+)/),
+    UNPAIRED_REGEX = new RegExp(/Unpaired ?channel (\d+)/);
+    QUIT_GAME_REGEX = new RegExp(/Analytics logged/);
+
+var findBaseTime = function(line) {
+    var timeMatch = LOG_TIME_REGEX.exec(line);
+    if (timeMatch) {
+        baseTime = Math.floor(new Date(timeMatch[2] + ' 00:00:00').getTime() / 1000);
+        startTime = Math.floor(new Date(timeMatch[2] + ' ' + timeMatch[1]).getTime() / 1000);
+    }
+}
+
+var IGNORED_MSGS = [
+    // Related to "TX POWER ID"
+    'RESET Complete, reason:',
+    'RESET_CMD',
+    'RESET_POR',
+    'Clearing network key on network',
+
+    // Related to "Starting ANT search"
+    'Stopping ANT search',
+    'Opening channel',
+    new RegExp(/Channel \d Closed/),
+    'Closed channel',
+    'Unassign Channel',
+    'Unassigned Channel',
+    'Setting Channel ID',
+    'Stopping initial device search',
+
+    // These don't seem to appear in the logs anymore
+    'Enable extended message',
+    'Extended messages enabled',
+
+    // Resistance stuff
+    'Transfer Completed',
+    'Transfer Failed',
+    'FET Transmission failed',
+    'Transfer in progress',
+    'FET grade set successfully',
+    'FET unhandled event',
+
+    // Misc. stuff related to pairing
+    'AUC message id=', // AUC = "Authentication Center"
+    'Setting network key on network',
+    'Network Key Set',
+    'Channel Assigned',
+    'Radio Frequency set',
+    'Channel ID Set',
+    'Channel ID set',
+    'Opening channel',
+    'Channel opened',
+
+    // Only appears once at start so can be ignored
+    'ANT USB receiver found',
+
+    // I don't know why the device ID is randomly logged
+    'dID',
+
+    // Quitting game
+    'SHUTDOWN:',
+
+    // Other
+    '[PowerMeter]',
+    'Unknown response',
+    '----------------------',
+
+    // KICKR related
+    'KICKR',
+    'Setting Sim',
+    'Burst Started'
+]
+
+var devices = {},
+    devices8Hz = [],
+    channelMap = {},
+    seenUnknown = [],
+    devicesContainer = document.querySelector('.devices-container');
+
+var getDeviceHz = function(device) {
+    return (devices8Hz.indexOf(device) >= 0) ? 8 : 4;
+}
+
+var padDevicesData = function(time) {
+    var latestTime;
+    for (var device in devices) {
+        if (!devices[device].length) {
+            latestTime = startTime - 1;
+        } else {
+            latestTime = devices[device][devices[device].length - 1].time;
+        }
+        while (!devices[device].length || latestTime < time) {
+            latestTime += 1;
+            devices[device].push({
+                time: latestTime,
+                channel0: 0,
+                channel0WrongState: 0,
+                connected: 0,
+                disconnected: 0,
+                gotoSearch: 0,
+                rxFail: 0,
+                paired: 0,
+                unpaired: 0
+            });
+        }
+    }
+}
+
+var logEvent = function(time, device, event) {
+    if (devices[device] === undefined) {
+        devices[device] = [];
+    }
+    padDevicesData(time);
+
+    var latest = devices[device][devices[device].length - 1];
+    latest[event] += 1;
+
+    if (event === 'rxFail' && devices8Hz.indexOf(device) < 0) {
+        // Zwift's timestamps aren't accurate enough to use > 5 instead of > 4
+        if (latest[event] > 5) {
+            devices8Hz.push(device);
+        }
+    }
+}
+
+var processMsg = function(time, msg) {
+    var ignore = false,
+        match;
+
+    if (msg === 'TX POWER ID') {
+        logEvent(time, 'usb', 'connected');
+    } else if (msg.startsWith('Could not assign channel 0 to network')) {
+        logEvent(time, 'usb', 'disconnected');
+    } else if (msg.startsWith('Goto Search')) {
+        logEvent(time, 'usb', 'gotoSearch');
+    } else if (msg.startsWith('Starting ANT search')) {
+        logEvent(time, 'usb', 'channel0');
+    } else if (msg.startsWith('Channel 0 in wrong state')) {
+        logEvent(time, 'usb', 'channel0WrongState');
+    } else if (msg.startsWith('Rx Fail on channel')) {
+        match = RX_FAIL_REGEX.exec(msg);
+        logEvent(time, channelMap[match[1]], 'rxFail');
+    } else if (msg.startsWith('Pairing')) {
+        match = PAIRED_REGEX.exec(msg);
+        channelMap[match[2]] = match[1];
+        //logEvent(time, match[1], 'paired');
+        logEvent(time, 'usb', 'paired'); // Let's keep the graphs simple and show this on USB instead
+    } else if (msg.startsWith('Unpaired')) {
+        match = UNPAIRED_REGEX.exec(msg);
+        //logEvent(time, match[1], 'unpaired');
+        logEvent(time, 'usb', 'unpaired'); // Let's keep the graphs simple and show this on USB instead
+    } else {
+        for (var i = 0; i < IGNORED_MSGS.length; i++) {
+            if (IGNORED_MSGS[i].exec !== undefined) {
+                if (IGNORED_MSGS[i].exec(msg)) {
+                    ignore = true;
+                }
+            } else if (msg.startsWith(IGNORED_MSGS[i])) {
+                ignore = true;
+            }
+        }
+        if (!ignore && seenUnknown.indexOf(msg) < 0) {
+            seenUnknown.push(msg);
+            console.log('Unknown ANT message: ' + msg);
+        }
+    }
+}
+
+var processLine = function(line) {
+    var lineMatch = LINE_REGEX.exec(line);
+    if (lineMatch) {
+        var hours = parseInt(lineMatch[1], 10),
+            minutes = parseInt(lineMatch[2], 10),
+            seconds = parseInt(lineMatch[3], 10),
+            msg = lineMatch[4];
+        if (hours < previousHour) {
+            // We have to deal with times wrapping around at midnight
+            days += 1;
+        }
+        previousHour = hours;
+        var time = seconds +
+                   minutes * 60 +
+                   hours * 60 * 60 +
+                   days * 24 * 60 * 60;
+        processMsg(baseTime + time, msg);
+    }
+}
+
+var getGraphData = function(device, field) {
+    var data = devices[device],
+        data2 = [],
+        bin;
+    for (var i = 0; i < data.length; i++) {
+        bin = Math.floor(data[i].time / GRAPH_BIN_SIZE) * GRAPH_BIN_SIZE;
+        if (data2.length && data2[data2.length - 1].x == bin) {
+            data2[data2.length - 1].y += data[i][field];
+        } else {
+            data2.push({
+                x: bin,
+                y: data[i][field],
+            });
+        }
+    }
+    if (field == 'rxFail') {
+        var hz = getDeviceHz(device);
+        for (var j = 0; j < data2.length; j++) {
+            data2[j].y = Math.round(data2[j].y / (hz * GRAPH_BIN_SIZE) * 100);
+            if (data2[j].y >= 66) {
+                data2[j].color = 'red';
+            } else if (data2[j].y >= 40) {
+                data2[j].color = 'orange';
+            } else {
+                data2[j].color = 'mediumseagreen';
+            }
+        }
+    }
+    return data2;
+}
+
+var graphsCache = {};
+
+var drawGraph = function(device, data) {
+    var average = null,
+        hz = getDeviceHz(device);
+
+    if (device !== 'usb') {
+        var totalRxFails = 0;
+        for (var i = 0; i < data[0].values.length; i++) {
+            totalRxFails += data[0].values[i].y;
+        }
+        average = (totalRxFails / (i + 1)).toFixed(2);
+    }
+
+    if (graphsCache[device] !== undefined) {
+        graphsCache[device].svg.style.width = data[0].values.length * 5 + 'px'; // 5px per bin
+        graphsCache[device].data.datum(data).call(graphsCache[device].chart);
+        if (average !== null) {
+            graphsCache[device].info.innerHTML = ' data rate: ' + hz + 'Hz, avg. fails: ' + average + '%';
+        }
+        scrollRight();
+    } else {
+        var header = document.createElement('div'),
+            title = document.createElement('h2'),
+            info = document.createElement('span'),
+            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'),
+            graphData;
+
+        header.className = 'device-header';
+        header.appendChild(title);
+        header.appendChild(info);
+
+        title.innerHTML = 'Device: ' + device.toUpperCase();
+        if (average !== null) {
+            info.innerHTML = ' data rate: ' + hz + 'Hz, avg. fails: ' + average + '%';
+        }
+        devicesContainer.appendChild(header);
+
+        svg.style.width = data[0].values.length * 5 + 'px'; // 5px per bin
+        devicesContainer.appendChild(svg);
+
+        nv.addGraph(function() {
+            var chart = nv.models.multiBarChart();
+
+            chart.duration(0);
+            chart.showLegend(false);
+            chart.showControls(false);
+            chart.multibar.stacked(true);
+            chart.useInteractiveGuideline(true);
+            chart.showYAxis(false);
+            chart.margin({left: 0, right: 0});
+
+            chart.xAxis.tickFormat(function(d) {
+                return d3.time.format('%X')(new Date(d * 1000));
+            });
+
+            if (device === 'usb') {
+                chart.yAxis.tickFormat(function(d) {
+                    return d.toFixed(0);
+                });
+                // This will cut off some data but USB dongle fails will flood
+                // the graph if we don't have some sort of cap.
+                chart.yDomain([0, 10]);
+            } else {
+                chart.yAxis.tickFormat(function (d) {
+                    return d + '%';
+                });
+                chart.yDomain([0, 100]);
+            }
+
+            graphData = d3.select(svg).datum(data)
+            graphData.call(chart);
+
+            graphsCache[device] = {
+                data: graphData,
+                chart: chart,
+                svg: svg,
+                info: info
+            }
+
+            scrollRight(true);
+
+            return chart;
+        });
+    }
+}
+
+var drawData = function() {
+    var orderedDevices = [],
+        device;
+
+    for (device in devices) {
+        if (device !== 'usb') {
+            orderedDevices.push(device);
+        }
+    }
+    orderedDevices.unshift('usb');
+
+    for (var i = 0; i < orderedDevices.length; i++) {
+        device = orderedDevices[i];
+        if (device === 'usb') {
+            drawGraph(device, [{
+                key: 'Too many rx fails',
+                values: getGraphData(device, 'gotoSearch'),
+                color: 'red'
+            }, {
+                key: 'USB dongle failed',
+                values: getGraphData(device, 'disconnected'),
+                color: 'red'
+            }, {
+                key: 'Channel 0 in wrong state',
+                values: getGraphData(device, 'channel0WrongState'),
+                color: 'red'
+            }, {
+                key: 'Search for new devices',
+                values: getGraphData(device, 'channel0'),
+                color: 'orange'
+            }, {
+                key: 'USB dongle plugged in',
+                values: getGraphData(device, 'connected'),
+                color: 'cornflowerblue'
+            }, {
+                key: 'Devices paired',
+                values: getGraphData(device, 'paired'),
+                color: 'cornflowerblue'
+            }, {
+                key: 'Devices unpaired',
+                values: getGraphData(device, 'unpaired'),
+                color: 'cornflowerblue'
+            }]);
+        } else {
+            drawGraph(device, [{
+                key: 'Rx fails',
+                values: getGraphData(device, 'rxFail'),
+                color: 'white'
+            }]);
+        }
+    }
+}
+
+var scrollRight = function(force) {
+    var maxScroll = devicesContainer.scrollWidth - devicesContainer.clientWidth,
+        distanceFromRight = maxScroll - devicesContainer.scrollLeft;
+    if (force || distanceFromRight < 100) {
+        devicesContainer.scrollLeft = maxScroll;
+    }
+}
+
+var tailFile = function(file, start) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var lines = e.target.result.slice(start).split('\n'),
+            quit = false,
+            timeMatch;
+
+        for (var i = 0; i < lines.length; i++) {
+            if (baseTime) {
+                processLine(lines[i]);
+            } else {
+                findBaseTime(lines[i]);
+            }
+            if (QUIT_GAME_REGEX.exec(lines[i])) {
+                quit = true;
+            }
+        }
+        if (lines.length) {
+            drawData();
+        }
+        if (!quit) {
+            setTimeout(function() {
+                tailFile(file, e.target.result.length);
+            }, 1000);
+        }
+    }
+    reader.readAsText(file);
+}
+
+var dropArea = document.querySelector('.drop-area');
+dropArea.addEventListener('dragstart',function(e) {
+    e.preventDefault()
+});
+dropArea.addEventListener('dragover',function(e) {
+    e.preventDefault()
+});
+dropArea.addEventListener('dragenter',function(e) {
+    dropArea.className += ' over';
+});
+dropArea.addEventListener('dragleave',function(e) {
+    dropArea.className = dropArea.className.replace(' over', '');
+});
+dropArea.addEventListener('drop', function(e) {
+    document.body.removeChild(dropArea);
+    e.preventDefault();
+    tailFile(e.dataTransfer.files[0], 0);
+});
+    </script>
+</body>
+</html>
