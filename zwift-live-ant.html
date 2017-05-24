@@ -56,6 +56,9 @@
         <h3>USB dongle failed</h3>
         <p>Something is wrong with the USB dongle. Zwift will see the dongle but won't be able to find any devices. Sometimes replugging it will fix the issue but other times you have to restart Zwift. So far I've only seen this happen with the Suunto Moviestick Mini and Tacx T2028 (both use the nRF24AP2U) and not the Garmin ANTUSB-m (appears to use something from the nRF51 series).</p>
 
+        <h3>USB dongle not found</h3>
+        <p>You started Zwift without the dongle plugged in. This is only displayed so that something shows up for Bluetooth logs instead of a confusing blank graph.</p>
+
         <h3>USB dongle plugged in</h3>
         <p>There should be only one of these at the start. If you see more then you might have a loose connection or an underpowered USB port.</p>
     </div>
@@ -226,6 +229,7 @@ var padDevicesData = function(time) {
                 channel0WrongState: 0,
                 connected: 0,
                 disconnected: 0,
+                notFound: 0,
                 gotoSearch: 0,
                 rxFail: 0,
                 paired: 0,
@@ -258,6 +262,8 @@ var processMsg = function(time, msg) {
 
     if (msg === 'TX POWER ID') {
         logEvent(time, 'usb', 'connected');
+    } else if (msg.startsWith('ANT USB receiver NOT found')) {
+        logEvent(time, 'usb', 'notFound');
     } else if (msg.startsWith('Could not assign channel 0 to network')) {
         logEvent(time, 'usb', 'disconnected');
     } else if (msg.startsWith('Goto Search')) {
@@ -456,6 +462,10 @@ var drawData = function() {
                 values: getGraphData(device, 'disconnected'),
                 color: 'red'
             }, {
+                key: 'USB dongle not found',
+                values: getGraphData(device, 'notFound'),
+                color: 'red'
+            }, {
                 key: 'Channel 0 in wrong state',
                 values: getGraphData(device, 'channel0WrongState'),
                 color: 'red'
@@ -511,7 +521,7 @@ var tailFile = function(file, start) {
                 quit = true;
             }
         }
-        if (lines.length) {
+        if (Object.keys(devices).length) {
             drawData();
         }
         if (!quit) {
