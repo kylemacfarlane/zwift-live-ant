@@ -167,6 +167,7 @@ var IGNORED_MSGS = [
     'Transfer in progress',
     'FET grade set successfully',
     'FET unhandled event',
+    'FET changing grade to',
 
     // Misc. stuff related to pairing
     'AUC message id=', // AUC = "Authentication Center"
@@ -524,10 +525,10 @@ var tailFile = function(file, start) {
 
 var dropArea = document.querySelector('.drop-area');
 dropArea.addEventListener('dragstart',function(e) {
-    e.preventDefault()
+    e.preventDefault();
 });
 dropArea.addEventListener('dragover',function(e) {
-    e.preventDefault()
+    e.preventDefault();
 });
 dropArea.addEventListener('dragenter',function(e) {
     dropArea.className += ' over';
