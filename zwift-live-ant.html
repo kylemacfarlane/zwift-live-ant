@@ -454,6 +454,10 @@ var drawData = function() {
         device = orderedDevices[i];
         if (device === 'usb') {
             drawGraph(device, [{
+                key: 'Channel 0 in wrong state',
+                values: getGraphData(device, 'channel0WrongState'),
+                color: 'red'
+            }, {
                 key: 'Too many rx fails',
                 values: getGraphData(device, 'gotoSearch'),
                 color: 'red'
@@ -466,17 +470,9 @@ var drawData = function() {
                 values: getGraphData(device, 'notFound'),
                 color: 'red'
             }, {
-                key: 'Channel 0 in wrong state',
-                values: getGraphData(device, 'channel0WrongState'),
-                color: 'red'
-            }, {
                 key: 'Search for new devices',
                 values: getGraphData(device, 'channel0'),
                 color: 'orange'
-            }, {
-                key: 'USB dongle plugged in',
-                values: getGraphData(device, 'connected'),
-                color: 'cornflowerblue'
             }, {
                 key: 'Devices paired',
                 values: getGraphData(device, 'paired'),
@@ -484,6 +480,10 @@ var drawData = function() {
             }, {
                 key: 'Devices unpaired',
                 values: getGraphData(device, 'unpaired'),
+                color: 'cornflowerblue'
+            }, {
+                key: 'USB dongle plugged in',
+                values: getGraphData(device, 'connected'),
                 color: 'cornflowerblue'
             }]);
         } else {
