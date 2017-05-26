@@ -41,7 +41,7 @@
         <p>An rx fail is when a page from an ANT+ device arrives later than expected and officially is caused only by interference. However I suspect it might also be made worse by slow processors and firmware in most trainers and power meters failing to keep up.</p>
         <p>When there are two seconds of solid rx fails (i.e. 8 straight rx fails at 4Hz or 16 at 8Hz) a drop out occurs. Unfortunately the Zwift logs aren't accurate enough to determine exactly when this happens.</p>
         <p>Since we can't determine exact signal quality and the fails are grouped into 10 second bins then the colours are actually pretty arbitrary. Green is 39% and under, orange is 40% to 65%, and red is 66% and above. They were chosen based on my experience of when drop outs start to occur with green being no drop outs, orange being possible drop outs, and red being almost certain drop outs.</p>
-        <p>It seems to be normal for trainers and power meters to have 2-4x the rx fails of heart rate and cadence devices.</p>
+        <p>It seems to be normal for trainers and power meters to have 2-5x the rx fails of heart rate and cadence devices.</p>
         <p>Sometimes even different ANT+ profiles broadcasted by the same device have different failure rates (this is why I suspect processors/firmware are partly responsible as well).</p>
         <p>If you see no rx fails but you are getting sensor readings then your environment is very very good. If you see no rx fails and you're not getting sensor readings then the device isn't connected.</p>
 
@@ -54,7 +54,7 @@
         <p>These also appear when a device has been idle for too long and in those cases is completely normal.</p>
 
         <h3>USB dongle failed</h3>
-        <p>Something is wrong with the USB dongle. Zwift will see the dongle but won't be able to find any devices. Sometimes replugging it will fix the issue but other times you have to restart Zwift. So far I've only seen this happen with the Suunto Moviestick Mini and Tacx T2028 (both use the nRF24AP2U) and not the Garmin ANTUSB-m (appears to use something from the nRF51 series).</p>
+        <p>Something is wrong with the USB dongle. Zwift will see the dongle but won't be able to find any devices. Sometimes replugging it will fix the issue but other times you have to restart Zwift.</p>
 
         <h3>USB dongle not found</h3>
         <p>You started Zwift without the dongle plugged in. This is only displayed so that something shows up for Bluetooth logs instead of a confusing blank graph.</p>
