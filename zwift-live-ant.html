@@ -356,7 +356,14 @@ var graphsCache = {};
 
 var drawGraph = function(device, data) {
     var average = null,
-        hz = getDeviceHz(device);
+        hz = getDeviceHz(device),
+        ticks = [];
+
+    for (var i = 0; i < data[0].values.length; i++) {
+        if (!(data[0].values[i].x % 120)) {
+            ticks.push(data[0].values[i].x);
+        }
+    }
 
     if (device !== 'usb') {
         var totalRxFails = 0;
@@ -404,9 +411,17 @@ var drawGraph = function(device, data) {
             chart.showYAxis(false);
             chart.margin({left: 0, right: 0});
 
-            chart.xAxis.tickFormat(function(d) {
-                return d3.time.format('%X')(new Date(d * 1000));
+            chart.xAxis.tickFormat(function(d, i) {
+                var format;
+                if (i === undefined) {
+                    format = '%X';
+                } else {
+                    format = '%H:%M';
+                }
+                return d3.time.format(format)(new Date(d * 1000));
             });
+            chart.reduceXTicks(false);
+            chart.xAxis.tickValues(ticks);
 
             if (device === 'usb') {
                 chart.yAxis.tickFormat(function(d) {
