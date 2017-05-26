@@ -45,8 +45,11 @@
         <p>Sometimes even different ANT+ profiles broadcasted by the same device have different failure rates (this is why I suspect processors/firmware are partly responsible as well).</p>
         <p>If you see no rx fails but you are getting sensor readings then your environment is very very good. If you see no rx fails and you're not getting sensor readings then the device isn't connected.</p>
 
-        <h3>Search for new devices</h3>
-        <p>Zwift searched for new devices. If this appears outside of the Zwift pairing screen then it probably indicates a problem. If you use the pairing screen as a break in Zwift then you might see a few of these mid-ride.</p>
+        <h3>Starting ANT+ search</h3>
+        <p>Zwift started a search for new devices. If this appears outside of the Zwift pairing screen then it probably indicates a problem. If you use the pairing screen as a brake in Zwift then you might see a few of these mid-ride.</p>
+
+        <h3>Stopping ANT+ search</h3>
+        <p>Zwift should follow every started search with a stopped search but sometimes gets itself into a buggy state where it spams stopped search and never starts new searches. If that happens then you will need to keep replugging the USB dongle or restart Zwift. Even though this is orange on the graph if you see it getting spammed hundreds of times then it's equivalent to "USB dongle failed".</p>
 
         <h3>Too many rx fails</h3>
         <p>This is a drop out after two seconds of solid rx fails. It may or may not align with an increase in rx fails on one of the device graphs.</p>
@@ -149,8 +152,7 @@ var IGNORED_MSGS = [
     'RESET_POR',
     'Clearing network key on network',
 
-    // Related to "Starting ANT search"
-    'Stopping ANT search',
+    // Related to "Starting/Stopping ANT search"
     'Opening channel',
     new RegExp(/Channel \d Closed/),
     'Closed channel',
@@ -225,7 +227,8 @@ var padDevicesData = function(time) {
             latestTime += 1;
             devices[device].push({
                 time: latestTime,
-                channel0: 0,
+                startSearch: 0,
+                stopSearch: 0,
                 channel0WrongState: 0,
                 connected: 0,
                 disconnected: 0,
@@ -269,7 +272,9 @@ var processMsg = function(time, msg) {
     } else if (msg.startsWith('Goto Search')) {
         logEvent(time, 'usb', 'gotoSearch');
     } else if (msg.startsWith('Starting ANT search')) {
-        logEvent(time, 'usb', 'channel0');
+        logEvent(time, 'usb', 'startSearch');
+    } else if (msg.startsWith('Stopping ANT search')) {
+        logEvent(time, 'usb', 'stopSearch');
     } else if (msg.startsWith('Channel 0 in wrong state')) {
         logEvent(time, 'usb', 'channel0WrongState');
     } else if (msg.startsWith('Rx Fail on channel')) {
@@ -429,7 +434,7 @@ var drawGraph = function(device, data) {
                 });
                 // This will cut off some data but USB dongle fails will flood
                 // the graph if we don't have some sort of cap.
-                chart.yDomain([0, 10]);
+                chart.yDomain([0, 20]);
             } else {
                 chart.yAxis.tickFormat(function (d) {
                     return d + '%';
@@ -485,8 +490,12 @@ var drawData = function() {
                 values: getGraphData(device, 'notFound'),
                 color: 'red'
             }, {
-                key: 'Search for new devices',
-                values: getGraphData(device, 'channel0'),
+                key: 'Starting ANT+ search',
+                values: getGraphData(device, 'startSearch'),
+                color: 'orange'
+            }, {
+                key: 'Stopping ANT+ search',
+                values: getGraphData(device, 'stopSearch'),
                 color: 'orange'
             }, {
                 key: 'Devices paired',
