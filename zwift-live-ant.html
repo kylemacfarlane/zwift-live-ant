@@ -380,6 +380,7 @@ var drawGraph = function(device, data) {
 
     if (graphsCache[device] !== undefined) {
         graphsCache[device].svg.style.width = data[0].values.length * 5 + 'px'; // 5px per bin
+        graphsCache[device].chart.xAxis.tickValues(ticks);
         graphsCache[device].data.datum(data).call(graphsCache[device].chart);
         if (average !== null) {
             graphsCache[device].info.innerHTML = ' data rate: ' + hz + 'Hz, avg. fails: ' + average + '%';
@@ -414,7 +415,7 @@ var drawGraph = function(device, data) {
             chart.multibar.stacked(true);
             chart.useInteractiveGuideline(true);
             chart.showYAxis(false);
-            chart.margin({left: 0, right: 0});
+            chart.margin({left: 30, right: 30});
 
             chart.xAxis.tickFormat(function(d, i) {
                 var format;
