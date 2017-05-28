@@ -379,7 +379,7 @@ var drawGraph = function(device, data) {
     }
 
     if (graphsCache[device] !== undefined) {
-        graphsCache[device].svg.style.width = data[0].values.length * 5 + 'px'; // 5px per bin
+        graphsCache[device].svg.style.width = (data[0].values.length * 5) + 60 + 'px'; // 5px per bin
         graphsCache[device].chart.xAxis.tickValues(ticks);
         graphsCache[device].data.datum(data).call(graphsCache[device].chart);
         if (average !== null) {
@@ -403,7 +403,7 @@ var drawGraph = function(device, data) {
         }
         devicesContainer.appendChild(header);
 
-        svg.style.width = data[0].values.length * 5 + 'px'; // 5px per bin
+        svg.style.width = (data[0].values.length * 5) + 60 + 'px'; // 5px per bin
         devicesContainer.appendChild(svg);
 
         nv.addGraph(function() {
