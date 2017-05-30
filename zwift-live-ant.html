@@ -202,7 +202,10 @@ var IGNORED_MSGS = [
     // KICKR related
     'KICKR',
     'Setting Sim',
-    'Burst Started'
+    'Burst Started',
+
+    // Shows up after restaring Zwift too soon after a crash
+    'Unknown Channel(0) Event 52'
 ]
 
 var devices = {},
@@ -261,6 +264,7 @@ var logEvent = function(time, device, event) {
 
 var processMsg = function(time, msg) {
     var ignore = false,
+        device,
         match;
 
     if (msg === 'TX POWER ID') {
@@ -279,7 +283,12 @@ var processMsg = function(time, msg) {
         logEvent(time, 'usb', 'channel0WrongState');
     } else if (msg.startsWith('Rx Fail on channel')) {
         match = RX_FAIL_REGEX.exec(msg);
-        logEvent(time, channelMap[match[1]], 'rxFail');
+        device = channelMap[match[1]]
+        // When restarting Zwift too soon after a crash there can be left over
+        // ANT events from the previous session which we need to ignore
+        if (device !== undefined) {
+            logEvent(time, device, 'rxFail');
+        }
     } else if (msg.startsWith('Pairing')) {
         match = PAIRED_REGEX.exec(msg);
         channelMap[match[2]] = match[1];
